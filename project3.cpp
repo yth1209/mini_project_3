@@ -3,68 +3,67 @@
 #include <mpi.h>
 #include <iostream>
 #include <vector>
+#include <limits>
 
 using namespace std;
 
-void readBoard(vector<vector<bool>>& board){
-    int m = board.size();
-    for(int i = 0; i < m; i++){
-        char line[m];
-        cin >> line;
-        for(int j = 0; j < m; j++){
-            board[i][j] = line[j] == '#';
+void readBoard(int m, int g, vector<vector<bool>>& board){
+    string line;
+    for(int i = g; i < m+g; i++){
+        cin >> line; 
+        for(int j = g; j < m+g; j++){
+            board[i][j] = (line[j - g] == '#');
         }
     }
 }
 
-void printBoard(vector<vector<bool>>& board){
-    for(int i = 0; i < board.size(); i++){
-        for(int j = 0; j < board[i].size(); j++){
+void printBoard(int m, int g, vector<vector<bool>>& board){
+    for(int i = g; i < m + g; i++){
+        for(int j = g; j < m + g; j++){
             cout << (board[i][j] ? '#' : '.');
         }
         cout << endl;
     }
+    cout << flush;
 }
 
 int getNeighCnt(int i, int j, vector<vector<bool>>& board) {
     int m = board.size();
 
     int cntNeigh = 0;
-    if(i != 0) {
-        cntNeigh += board[i-1][j]; 
-        if(j != 0) cntNeigh += board[i-1][j-1];
-        if(j!= m-1) cntNeigh += board[i-1][j+1];
-    }
-    if (i != m-1) {
-        cntNeigh += board[i+1][j];
-        if(j != 0) cntNeigh += board[i+1][j-1];
-        if(j!= m-1) cntNeigh += board[i+1][j+1];
-    }
-    if(j != 0) cntNeigh += board[i][j-1];
-    if(j != m-1) cntNeigh += board[i][j+1];
+
+    cntNeigh += board[i][j-1];
+    cntNeigh += board[i][j+1];
+    
+    cntNeigh += board[i-1][j]; 
+    cntNeigh += board[i-1][j-1];
+    cntNeigh += board[i-1][j+1];
+ 
+    cntNeigh += board[i+1][j];
+    cntNeigh += board[i+1][j-1];
+    cntNeigh += board[i+1][j+1];
     
     return cntNeigh;
 }
 
-void step(vector<vector<bool>>& board){
-    int m = board.size();
+void step(int g, vector<vector<bool>>& board){
+    vector<pair<int,int>> changed_cells;
 
-    vector<vector<bool>> newBoard(m, vector<bool>(m));
-
-    for(int i = 0; i < m; i++){
-        for(int j = 0; j < m; j++){
+    for(int i = g; i < board.size()-g; i++){
+        for(int j = g; j < board.size()-g; j++){
             int neighCnt = getNeighCnt(i, j, board);
 
             if(board[i][j]){
-                if(neighCnt < 2 || neighCnt > 3) newBoard[i][j] = false;
-                else newBoard[i][j] = true;
+                if(neighCnt < 2 || neighCnt > 3) changed_cells.push_back({i,j});
             } else {
-                if(neighCnt == 3) newBoard[i][j] = true;
-                else newBoard[i][j] = false;
+                if(neighCnt == 3) changed_cells.push_back({i,j});
             }
         }
     }
-    board = newBoard;
+
+    for(auto cell: changed_cells){
+        board[cell.first][cell.second] = !board[cell.first][cell.second]; 
+    }
 }
 
 int main(int argc, char* argv[]) {    
@@ -78,7 +77,8 @@ int main(int argc, char* argv[]) {
     int m; // size of board    
     int n; // final generation
     int g; // size of ghost cell
-    vector<vector<bool>> board; //board
+    vector<vector<bool>> board; 
+    vector<vector<bool>> local_board; 
 
     if(myrank == 0){
         cin >> m >> n >> g; // read m, n, g from txt input
@@ -86,27 +86,30 @@ int main(int argc, char* argv[]) {
     MPI_Bcast(&m, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&g, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    // cout << "myrank: "<< myrank <<  " m: " << m << " n: " << n << " g: " << g << endl;
-
-    board = vector<vector<bool>> (m, vector<bool>(m));  
 
     if(myrank == 0){
-        readBoard(board); // read board from txt input
+        board = vector<vector<bool>>(m+2*g, vector<bool>(m+2*g, false));
+        readBoard(m, g, board); // read board from txt input
     }; 
 
     //TODO send the partition of the board to each process
-    
+    //Partitioned board will be a 2D vector of size (m/root(npes) + 2g)
+
     for(int gen = 0; gen < n; gen++){
-        step(board);
+        step(g, board);
+        
         //TODO send the ghost cells value to each process
     }
 
     //TODO gather the board from each process to the root process
 
     if(myrank == 0){
-        printBoard(board);
+        printBoard(m, g, board);
     }
 
     MPI_Finalize();
     return 0;
 }
+
+
+    // cout << "myrank: "<< myrank <<  " m: " << m << " n: " << n << " g: " << g << endl;  
