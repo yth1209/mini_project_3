@@ -67,20 +67,46 @@ void step(vector<vector<bool>>& board){
     board = newBoard;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {    
+    
+    int npes, myrank;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &npes);
+    MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+
+
     int m; // size of board    
     int n; // final generation
     int g; // size of ghost cell
-    cin >> m >> n >> g; // read m, n, g from txt input
+    vector<vector<bool>> board; //board
 
-    vector<vector<bool>> board(m, vector<bool>(m)); //board
-    readBoard(board);
+    if(myrank == 0){
+        cin >> m >> n >> g; // read m, n, g from txt input
+    }
+    MPI_Bcast(&m, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&g, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    // cout << "myrank: "<< myrank <<  " m: " << m << " n: " << n << " g: " << g << endl;
 
+    board = vector<vector<bool>> (m, vector<bool>(m));  
 
+    if(myrank == 0){
+        readBoard(board); // read board from txt input
+    }; 
+
+    //TODO send the partition of the board to each process
+    
     for(int gen = 0; gen < n; gen++){
         step(board);
+        //TODO send the ghost cells value to each process
     }
 
-    printBoard(board);
+    //TODO gather the board from each process to the root process
+
+    if(myrank == 0){
+        printBoard(board);
+    }
+
+    MPI_Finalize();
     return 0;
 }
