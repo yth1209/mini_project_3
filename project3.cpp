@@ -27,7 +27,7 @@ int l_board_size; //local board size
 inline int idx(int i, int j, int cols) {
     return i * cols + j;
 }
-inline pair<int,int> rank_ij(int rank, int d) {
+inline pair<int,int> rank_ij(int rank) {
     return {rank / d, rank % d};
 }
 
@@ -40,7 +40,6 @@ void initSquareDoubleArray(int m, bool*** arr){
         }
     }
 }
-
 
 void freeSquareDoubleArray(int m, bool*** arr){
     for(int i = 0; i < m; i++){
@@ -95,31 +94,41 @@ void printBoard(int m, int g, bool** board){
 }
 
 
-int getNeighCnt(int i, int j, bool*** board) {
+int getNeighCnt(int i, int j, int board_size, bool** board) {
     int cntNeigh = 0;
 
-    cntNeigh += (*board)[i][j-1];
-    cntNeigh += (*board)[i][j+1];
-    
-    cntNeigh += (*board)[i-1][j]; 
-    cntNeigh += (*board)[i-1][j-1];
-    cntNeigh += (*board)[i-1][j+1];
- 
-    cntNeigh += (*board)[i+1][j];
-    cntNeigh += (*board)[i+1][j-1];
-    cntNeigh += (*board)[i+1][j+1];
+    cntNeigh += (*board)[idx(i, j-1, board_size)];
+    cntNeigh += (*board)[idx(i, j+1, board_size)];
+    cntNeigh += (*board)[idx(i-1, j, board_size)]; 
+    cntNeigh += (*board)[idx(i-1, j-1, board_size)];
+    cntNeigh += (*board)[idx(i-1, j+1, board_size)];
+    cntNeigh += (*board)[idx(i+1, j, board_size)];
+    cntNeigh += (*board)[idx(i+1, j-1, board_size)];
+    cntNeigh += (*board)[idx(i+1, j+1, board_size)];
     
     return cntNeigh;
 }
 
-void step(int m, int g, bool*** board){
+bool isPaddingCell(int i, int j){
+    if(padding_cells == 0) return false; //no padding cells
+    auto r_ij = rank_ij(myrank);
+    int board_i = i + (r_ij.first * d + g);
+    int board_j = i + (r_ij.second * d + g);
+
+    if(board_i >= m+g || board_j >= m+g) return true; 
+    else return false;
+}
+
+void step(bool** local_board){
     vector<pair<int,int>> changed_cells;
 
     for(int i = g; i < m + g; i++){
         for(int j = g; j < m + g; j++){
-            int neighCnt = getNeighCnt(i, j, board);
+            if(isPaddingCell(i,j)) continue; //skip padding cells
+            
+            int neighCnt = getNeighCnt(i, j, l_board_size, local_board);
 
-            if((*board)[i][j]){
+            if((*local_board)[idx(i,j,l_board_size)]){
                 if(neighCnt < 2 || neighCnt > 3) changed_cells.push_back({i,j});
             } else {
                 if(neighCnt == 3) changed_cells.push_back({i,j});
@@ -128,7 +137,7 @@ void step(int m, int g, bool*** board){
     }
 
     for(auto cell: changed_cells){
-        (*board)[cell.first][cell.second] = !(*board)[cell.first][cell.second]; 
+        (*local_board)[idx(cell.first, cell.second, l_board_size)] = !(*local_board)[idx(cell.first, cell.second, l_board_size)]; 
     }
 }
 
@@ -144,7 +153,7 @@ void initBoardAndLocalBoard(bool** local_board, bool*** board){
 
         //SEND the partition of the board to each process
         for(int rank = 1; rank < npes; rank++){
-            auto r_ij = rank_ij(rank, d);
+            auto r_ij = rank_ij(rank);
             
             bool* send_data = new bool[l_board_size * l_board_size];
             boardToLocalBoard(l_board_size, g, &send_data, r_ij.first*l_comp_size, r_ij.second*l_comp_size, board);
@@ -166,7 +175,7 @@ void mergeLocalBoardToBoard(bool** local_board, bool*** board){
         localBoardToBoard(l_board_size, g, local_board, 0, 0, board);
 
         for(int rank = 1; rank < npes; rank++){
-            auto r_ij = rank_ij(rank, d);
+            auto r_ij = rank_ij(rank);
 
             MPI_Status merge_status;
             bool* recv_data = new bool[l_board_size * l_board_size];
@@ -214,8 +223,9 @@ int main(int argc, char* argv[]) {
     initBoardAndLocalBoard(&local_board, &board);
 
     for(int gen = 0; gen < n; gen++){
-        // step(local_m, g, local_board);
+        step(&local_board);
         //TODO send the ghost cells value to each process
+        
     }
 
     mergeLocalBoardToBoard(&local_board, &board);
