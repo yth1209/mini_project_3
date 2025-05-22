@@ -8,68 +8,67 @@
 
 using namespace std;
 
-void initDoubleSquareArray(int m, bool ** arr){
-    arr = new bool*[m];
+void initDoubleSquareArray(int m, bool*** arr){
+    *arr = new bool*[m];
     for(int i = 0; i < m; i++){
-        arr[i] = new bool[m];
+        (*arr)[i] = new bool[m];
         for(int j = 0; j < m; j++){
-            arr[i][j] = false;
+            (*arr)[i][j] = false;
         }
     }
 }
 
-void freeDoubleSquareArray(int m, bool ** arr){
+void freeDoubleSquareArray(int m, bool*** arr){
     for(int i = 0; i < m; i++){
-        delete[] arr[i];
+        delete[] (*arr)[i];
     }
-    delete[] arr;
+    delete[] (*arr);
 }
 
-void readBoard(int m, int g, bool** board){
+void readBoard(int m, int g, bool*** board){
     string line;
     for(int i = g; i < m+g; i++){
         cin >> line; 
         for(int j = g; j < m+g; j++){
-            board[i][j] = (line[j - g] == '#');
+            (*board)[i][j] = (line[j - g] == '#');
         }
     }
 }
 
-void printBoard(int m, int g, bool ** board){
+void printBoard(int m, int g, bool*** board){
     for(int i = g; i < m + g; i++){
         for(int j = g; j < m + g; j++){
-            cout << (board[i][j] ? '#' : '.');
+            cout << ((*board)[i][j] ? '#' : '.');
         }
         cout << endl;
     }
-    cout << flush;
 }
 
-int getNeighCnt(int i, int j, bool** board) {
+int getNeighCnt(int i, int j, bool*** board) {
     int cntNeigh = 0;
 
-    cntNeigh += board[i][j-1];
-    cntNeigh += board[i][j+1];
+    cntNeigh += (*board)[i][j-1];
+    cntNeigh += (*board)[i][j+1];
     
-    cntNeigh += board[i-1][j]; 
-    cntNeigh += board[i-1][j-1];
-    cntNeigh += board[i-1][j+1];
+    cntNeigh += (*board)[i-1][j]; 
+    cntNeigh += (*board)[i-1][j-1];
+    cntNeigh += (*board)[i-1][j+1];
  
-    cntNeigh += board[i+1][j];
-    cntNeigh += board[i+1][j-1];
-    cntNeigh += board[i+1][j+1];
+    cntNeigh += (*board)[i+1][j];
+    cntNeigh += (*board)[i+1][j-1];
+    cntNeigh += (*board)[i+1][j+1];
     
     return cntNeigh;
 }
 
-void step(int m, int g, bool ** board){
+void step(int m, int g, bool*** board){
     vector<pair<int,int>> changed_cells;
 
     for(int i = g; i < m + g; i++){
         for(int j = g; j < m + g; j++){
             int neighCnt = getNeighCnt(i, j, board);
 
-            if(board[i][j]){
+            if((*board)[i][j]){
                 if(neighCnt < 2 || neighCnt > 3) changed_cells.push_back({i,j});
             } else {
                 if(neighCnt == 3) changed_cells.push_back({i,j});
@@ -78,7 +77,7 @@ void step(int m, int g, bool ** board){
     }
 
     for(auto cell: changed_cells){
-        board[cell.first][cell.second] = !board[cell.first][cell.second]; 
+        (*board)[cell.first][cell.second] = !(*board)[cell.first][cell.second]; 
     }
 }
 
@@ -109,17 +108,16 @@ int main(int argc, char* argv[]) {
     MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&g, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    int board_size = m+2*g + (m+2*g) % d; //padding with dimmension
-    int l_board_size = board_size/d + 2*g; //local board size
-    int l_comp_size = board_size/d; //local computing size
-    
-    initDoubleSquareArray(l_board_size, local_board);
-    if(myrank == 0){
-        initDoubleSquareArray(board_size, board);
-        readBoard(m, g, board); // read board from txt input
+    int board_size = (m+ m % d) + 2 * g; //padding with dimmension
+    int l_comp_size = (m + m % d) / d; //local computing size
+    int l_board_size = l_comp_size + 2 * g; //local board size
 
-        //TODO send the partition of the board to each process
-        //Partitioned board will be a 2D vector of size (d + 2g))
+    initDoubleSquareArray(l_board_size, &local_board);
+    if(myrank == 0){
+        initDoubleSquareArray(board_size, &board);
+        readBoard(m, g, &board); // read board from txt input
+        
+        //SEND the partition of the board to each process
         for(int ri = 0; ri < d; ri++){
             for(int rj = 0; rj < d; rj++){
                 int rank = ri * d + rj;
@@ -130,11 +128,13 @@ int main(int argc, char* argv[]) {
             }
         }
     }; 
+
+    //RECIEIVE the partition of the board from the root process
     for(int i = 0; i < l_board_size; i++){
-        MPI_Send(&local_board[i][0], l_board_size, MPI_CXX_BOOL, myrank, i, MPI_COMM_WORLD);
+        MPI_Status status;
+        MPI_Recv(local_board[i], l_board_size, MPI_CXX_BOOL, 0, i, MPI_COMM_WORLD, &status);
     }
-    cout << "myrank: "<< myrank << endl;
-    printBoard(l_board_size, g, local_board);
+    // printBoard(l_comp_size, g, &local_board);
 
 
     for(int gen = 0; gen < n; gen++){
@@ -148,6 +148,9 @@ int main(int argc, char* argv[]) {
     if(myrank == 0){
         // printBoard(m, g, board);
     }
+
+    freeDoubleSquareArray(l_board_size, &local_board);
+    freeDoubleSquareArray(board_size, &board);
 
     MPI_Finalize();
     return 0;
