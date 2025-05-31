@@ -168,7 +168,7 @@ void sendRecvGhostCells(bool** local_board) {
         &(*local_board)[idx(g + l_comp_size, g, l_board_size)], 1, row_type, south, 0,
         cart_comm, &status);
     MPI_Sendrecv(
-        &(*local_board)[idx(g + l_comp_size - g, g, l_board_size)], 1, row_type, south, 1,
+        &(*local_board)[idx(l_comp_size, g, l_board_size)], 1, row_type, south, 1,
         &(*local_board)[idx(0, g, l_board_size)], 1, row_type, north, 1,
         cart_comm, &status);
 
@@ -178,7 +178,7 @@ void sendRecvGhostCells(bool** local_board) {
         &(*local_board)[idx(g, g + l_comp_size, l_board_size)], 1, col_type, east, 2,
         cart_comm, &status);
     MPI_Sendrecv(
-        &(*local_board)[idx(g, g + l_comp_size - g, l_board_size)], 1, col_type, east, 3,
+        &(*local_board)[idx(g,l_comp_size, l_board_size)], 1, col_type, east, 3,
         &(*local_board)[idx(g, 0, l_board_size)], 1, col_type, west, 3,
         cart_comm, &status);
 
@@ -193,9 +193,20 @@ void sendRecvGhostCells(bool** local_board) {
         &(*local_board)[idx(g, g, l_board_size)], 1, corner_type, nw, 4,
         &(*local_board)[idx(g + l_comp_size, g + l_comp_size, l_board_size)], 1, corner_type, se, 4,
         cart_comm, &status);
+
     MPI_Sendrecv(
-        &(*local_board)[idx(g, g + l_comp_size - g, l_board_size)], 1, corner_type, ne, 5,
-        &(*local_board)[idx(g + l_comp_size, 0, l_board_size)], 1, corner_type, sw, 5,
+        &(*local_board)[idx(l_comp_size, l_comp_size, l_board_size)], 1, corner_type, se, 5,
+        &(*local_board)[idx(0, 0, l_board_size)], 1, corner_type, nw, 5,
+        cart_comm, &status);
+
+    MPI_Sendrecv(
+        &(*local_board)[idx(g, l_comp_size, l_board_size)], 1, corner_type, ne, 6,
+        &(*local_board)[idx(g + l_comp_size, 0, l_board_size)], 1, corner_type, sw, 6,
+        cart_comm, &status);
+
+    MPI_Sendrecv(
+        &(*local_board)[idx(l_comp_size, g, l_board_size)], 1, corner_type, sw, 7,
+        &(*local_board)[idx(0, g + l_comp_size, l_board_size)], 1, corner_type, ne, 7,
         cart_comm, &status);
 
     MPI_Type_free(&row_type);
